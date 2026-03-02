@@ -1,7 +1,4 @@
 import { configDotenv } from "dotenv";
-
 configDotenv();
 
-export const {
-    PORT
-} = process.env;
+export const { PORT, DATABASE_URL, JWT_SECRET } = process.env;
