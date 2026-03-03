@@ -7,10 +7,11 @@ import { JWT_SECRET } from '../config/env.js';
 // Cookie config — httpOnly so JS can't touch it, secure in production
 const COOKIE_OPTIONS = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,
     sameSite: 'strict' as const,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
 };
+
 
 const generateToken = (userId: string): string =>
     jwt.sign({ userId }, JWT_SECRET!, { expiresIn: '7d' });
@@ -34,8 +35,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
             res.status(409).json({ message: 'An account with this email already exists' });
             return;
         }
-
-        const hashedPassword = await bcrypt.hash(password, 12);
+        const salt = await bcrypt.genSalt(12);
+        const hashedPassword = await bcrypt.hash(password, salt);
         const user = await createUser({ email, name, password: hashedPassword });
 
         const token = generateToken(user.id);
