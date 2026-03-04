@@ -10,7 +10,7 @@ const REFRESH_COOKIE_OPTIONS = {
     httpOnly: true,
     secure: false, 
     sameSite: 'strict' as const,
-    maxAge: 7 * 24 * 60 * 60 * 1000, 
+    maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
 const generateAccessToken = (userId: string): string =>
@@ -87,7 +87,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         const accessToken = generateAccessToken(user.id);
         const refreshToken = generateRefreshToken(user.id);
 
-        
+
         await redisClient.set(refreshKey(user.id), refreshToken, { EX: 604800 });
 
         res.cookie('refresh_token', refreshToken, REFRESH_COOKIE_OPTIONS);
