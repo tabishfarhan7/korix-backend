@@ -5,32 +5,23 @@ import { findUserByEmail, findUserById, createUser } from '../models/user.model.
 import { JWT_SECRET, JWT_REFRESH_SECRET } from '../config/env.js';
 import redisClient from '../database/redis.js';
 
-// ─── Cookie Configs ───────────────────────────────────────────────────────────
 
-// Refresh token cookie — long lived, httpOnly
 const REFRESH_COOKIE_OPTIONS = {
     httpOnly: true,
-    secure: false, // set true in production (HTTPS)
+    secure: false, 
     sameSite: 'strict' as const,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+    maxAge: 7 * 24 * 60 * 60 * 1000, 
 };
 
-// ─── Token Generators ─────────────────────────────────────────────────────────
-
-// Short-lived: sent in response body, stored in memory on client
 const generateAccessToken = (userId: string): string =>
     jwt.sign({ userId }, JWT_SECRET!, { expiresIn: '15m' });
 
-// Long-lived: stored in httpOnly cookie + Redis whitelist
 const generateRefreshToken = (userId: string): string =>
     jwt.sign({ userId }, JWT_REFRESH_SECRET!, { expiresIn: '7d' });
 
-// Redis key pattern for refresh tokens
 const refreshKey = (userId: string) => `refresh:${userId}`;
 
-// ─── Controllers ──────────────────────────────────────────────────────────────
 
-// POST /api/auth/register
 export const register = async (req: Request, res: Response): Promise<void> => {
     try {
         const { email, name, password } = req.body as {
@@ -54,11 +45,9 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         const hashedPassword = await bcrypt.hash(password, salt);
         const user = await createUser({ email, name, password: hashedPassword });
 
-        // Issue both tokens
         const accessToken = generateAccessToken(user.id);
         const refreshToken = generateRefreshToken(user.id);
 
-        // Store refresh token in Redis (7 days = 604800 seconds)
         await redisClient.set(refreshKey(user.id), refreshToken, { EX: 604800 });
 
         res.cookie('refresh_token', refreshToken, REFRESH_COOKIE_OPTIONS);
@@ -74,7 +63,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     }
 };
 
-// POST /api/auth/login
 export const login = async (req: Request, res: Response): Promise<void> => {
     try {
         const { email, password } = req.body as { email: string; password: string };
@@ -96,12 +84,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        // Issue both tokens
         const accessToken = generateAccessToken(user.id);
         const refreshToken = generateRefreshToken(user.id);
 
-        // Store refresh token in Redis (7 days = 604800 seconds)
-        // This also replaces any previously stored token (single active session per user)
+        
         await redisClient.set(refreshKey(user.id), refreshToken, { EX: 604800 });
 
         res.cookie('refresh_token', refreshToken, REFRESH_COOKIE_OPTIONS);
@@ -119,7 +105,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 };
 
-// POST /api/auth/refresh  — issues a new access token from the refresh token cookie
 export const refresh = async (req: Request, res: Response): Promise<void> => {
     try {
         const token = (req.cookies as Record<string, string | undefined>)?.refresh_token;
@@ -129,10 +114,8 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        // Verify the refresh token signature
         const decoded = jwt.verify(token, JWT_REFRESH_SECRET!) as { userId: string };
 
-        // Check Redis — token must still be in the whitelist
         const stored = await redisClient.get(refreshKey(decoded.userId));
         if (!stored || stored !== token) {
             res.status(401).json({ message: 'Refresh token is invalid or has been revoked' });
@@ -153,7 +136,6 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     }
 };
 
-// GET /api/auth/profile  — protected
 export const profile = async (req: Request, res: Response): Promise<void> => {
     try {
         const user = await findUserById((req as any).userId as string);
@@ -168,12 +150,9 @@ export const profile = async (req: Request, res: Response): Promise<void> => {
     }
 };
 
-// POST /api/auth/logout  — protected
 export const logout = async (req: Request, res: Response): Promise<void> => {
     try {
         const userId = (req as any).userId as string;
-
-        // Revoke the refresh token from Redis — now it's dead even if the cookie is stolen
         await redisClient.del(refreshKey(userId));
 
         res.clearCookie('refresh_token', REFRESH_COOKIE_OPTIONS);
